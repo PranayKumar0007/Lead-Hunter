@@ -1,6 +1,8 @@
 import os
+import time
 import requests
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 load_dotenv()
 
@@ -27,29 +29,33 @@ def geocode_location(location: str) -> tuple[float, float]:
     return coords["lat"], coords["lng"]
 
 
-def fetch_places(lat: float, lng: float) -> list[dict]:
-    """Fetch nearby businesses matching the search query."""
+def _extract_domain(website: str) -> str:
+    """Return bare domain from URL."""
+    if not website:
+        return ""
+    parsed = urlparse(website if website.startswith("http") else f"https://{website}")
+    return parsed.netloc.replace("www.", "").lower().strip()
+
+
+def fetch_places_page(lat: float, lng: float, page_token: str = None) -> tuple[list, str | None]:
+    """
+    Fetch a single page of nearby businesses.
+    Returns (results_list, next_page_token_or_None).
+    """
     params = {
         "location": f"{lat},{lng}",
         "radius": SEARCH_RADIUS_METERS,
         "keyword": SEARCH_QUERY,
         "key": GOOGLE_MAPS_API_KEY,
     }
-    businesses = []
-    next_page_token = None
+    if page_token:
+        params["pagetoken"] = page_token
+        time.sleep(2)   # Google requires a short delay before using a page token
 
-    while len(businesses) < MAX_LEADS:
-        if next_page_token:
-            params["pagetoken"] = next_page_token
-        resp = requests.get(PLACES_URL, params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        businesses.extend(data.get("results", []))
-        next_page_token = data.get("next_page_token")
-        if not next_page_token:
-            break
-
-    return businesses[:MAX_LEADS]
+    resp = requests.get(PLACES_URL, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get("results", []), data.get("next_page_token")
 
 
 def get_place_details(place_id: str) -> dict:
@@ -66,25 +72,90 @@ def get_place_details(place_id: str) -> dict:
 
 def get_leads() -> list[dict]:
     """
-    Main function — returns a list of lead dicts:
-    {name, address, phone, website}
+    Basic lead fetch — returns up to MAX_LEADS businesses.
+    Does NOT filter against the tracker DB (use get_fresh_leads for that).
     """
     print(f"[Maps] Geocoding '{SEARCH_LOCATION}'...")
     lat, lng = geocode_location(SEARCH_LOCATION)
 
     print(f"[Maps] Searching for '{SEARCH_QUERY}' near {lat:.4f},{lng:.4f}...")
-    places = fetch_places(lat, lng)
+
+    places = []
+    next_token = None
+    while len(places) < MAX_LEADS:
+        page, next_token = fetch_places_page(lat, lng, next_token)
+        places.extend(page)
+        if not next_token:
+            break
+
+    places = places[:MAX_LEADS]
     print(f"[Maps] Found {len(places)} businesses. Fetching details...")
 
     leads = []
     for place in places:
         details = get_place_details(place["place_id"])
         leads.append({
-            "name": details.get("name", place.get("name", "")),
+            "name":    details.get("name", place.get("name", "")),
             "address": details.get("formatted_address", ""),
-            "phone": details.get("formatted_phone_number", ""),
+            "phone":   details.get("formatted_phone_number", ""),
             "website": details.get("website", ""),
         })
 
     print(f"[Maps] Done. {len(leads)} leads collected.")
     return leads
+
+
+def get_fresh_leads(known_domains: set = None) -> list[dict]:
+    """
+    Fetch leads, skipping any whose domain is already in known_domains.
+    Keeps fetching more Google Maps pages until MAX_LEADS fresh leads are found
+    or there are no more results.
+
+    known_domains: set of domain strings from lead_tracker.get_known_domains()
+    """
+    if known_domains is None:
+        known_domains = set()
+
+    print(f"[Maps] Geocoding '{SEARCH_LOCATION}'...")
+    lat, lng = geocode_location(SEARCH_LOCATION)
+    print(f"[Maps] Searching for '{SEARCH_QUERY}' near {lat:.4f},{lng:.4f}...")
+    print(f"[Maps] Skipping {len(known_domains)} already-known domains...")
+
+    fresh_leads = []
+    skipped = 0
+    next_token = None
+    page_num = 0
+
+    while len(fresh_leads) < MAX_LEADS:
+        page_num += 1
+        page, next_token = fetch_places_page(lat, lng, next_token)
+
+        if not page:
+            break
+
+        for place in page:
+            if len(fresh_leads) >= MAX_LEADS:
+                break
+
+            details = get_place_details(place["place_id"])
+            website = details.get("website", "")
+            domain = _extract_domain(website)
+
+            if domain and domain in known_domains:
+                print(f"[Maps] ⏭️  Skipping known lead: {details.get('name', '')} ({domain})")
+                skipped += 1
+                continue
+
+            fresh_leads.append({
+                "name":    details.get("name", place.get("name", "")),
+                "address": details.get("formatted_address", ""),
+                "phone":   details.get("formatted_phone_number", ""),
+                "website": website,
+            })
+
+        if not next_token:
+            print(f"[Maps] No more pages available after page {page_num}.")
+            break
+
+    print(f"[Maps] Done. {len(fresh_leads)} fresh leads found, {skipped} known leads skipped.")
+    return fresh_leads

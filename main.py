@@ -2,24 +2,27 @@
 Lead Hunter — main pipeline orchestrator
 =========================================
 Pipeline:
-  1. maps_fetcher       → find service businesses via Google Maps
-  2. email_finder       → find their email via Hunter.io
-  3. company_researcher → scrape & summarize each business website
-  4. ai_outreach        → generate personalized SMYKM cold email via GPT-4o-mini
-  5. email_sender       → send (or dry-run) via Gmail SMTP
-  6. report             → save CSV + print summary
+  1. lead_tracker       → load known domains to skip already-contacted leads
+  2. maps_fetcher       → find FRESH service businesses via Google Maps
+  3. email_finder       → find their email (Snov.io → website scrape → pattern)
+  4. company_researcher → scrape & summarize each business website
+  5. ai_outreach        → generate personalized SMYKM cold email via GPT-4o-mini
+  6. email_sender       → send (or dry-run) via Zoho SMTP
+  7. lead_tracker       → save run results to persistent DB
+  8. report             → save CSV + print summary
 
 IMPORTANT:
   ACTUALLY_SEND = False  → dry run (safe, default)
   ACTUALLY_SEND = True   → live send (only flip after reviewing CSV!)
 """
 
-from maps_fetcher import get_leads
+from maps_fetcher import get_fresh_leads
 from email_finder import enrich_leads_with_emails
 from company_researcher import research_company
 from ai_outreach import generate_emails_for_leads, generate_email, YOUR_SERVICE
 from email_sender import send_emails_for_leads
 from report import save_to_csv, print_summary
+from lead_tracker import get_known_domains, upsert_leads, get_summary
 
 # ─── SAFETY SWITCH ────────────────────────────────────────────────────────────
 #  Set to True ONLY after you've reviewed the dry-run CSV in output/leads.csv
@@ -30,16 +33,22 @@ ACTUALLY_SEND = False
 def main():
     print("\n🚀 Starting Lead Hunter pipeline...\n")
 
-    # Step 1: Find businesses
-    leads = get_leads()
+    # Step 1: Load known domains to skip already-contacted leads
+    known_domains = get_known_domains()
+    if known_domains:
+        print(f"[Tracker] 📋 {len(known_domains)} leads already in DB — will skip them.\n")
+
+    # Step 2: Find FRESH businesses (skips known domains, fetches more pages if needed)
+    leads = get_fresh_leads(known_domains=known_domains)
     if not leads:
-        print("No leads found. Check your Google Maps API key or search config.")
+        print("No fresh leads found. All nearby businesses may already be in your DB.")
+        print("Try expanding SEARCH_RADIUS_METERS or changing SEARCH_QUERY in .env")
         return
 
-    # Step 2: Find emails
+    # Step 3: Find emails
     leads = enrich_leads_with_emails(leads)
 
-    # Step 3: Research each business website + generate SMYKM cold email
+    # Step 4: Research each business website + generate SMYKM cold email
     for lead in leads:
         if lead.get("email"):
             print(f"[Research] Researching: {lead['name']}...")
@@ -54,16 +63,23 @@ def main():
             lead["email_subject"] = ""
             lead["email_body"] = ""
 
-    # Step 4: Send (or dry run)
+    # Step 5: Send (or dry run)
     if not ACTUALLY_SEND:
         print("\n⚠️  DRY RUN MODE — no emails will be sent.")
         print("   Review output/leads.csv, then set ACTUALLY_SEND = True to go live.\n")
     leads = send_emails_for_leads(leads, actually_send=ACTUALLY_SEND)
 
-    # Step 5: Save CSV report + print summary
+    # Step 6: Save to persistent lead DB
+    upsert_leads(leads)
+
+    # Step 7: Save CSV report + print per-run summary
     save_to_csv(leads)
     print_summary(leads)
+
+    # Step 8: Print all-time tracker summary
+    get_summary()
 
 
 if __name__ == "__main__":
     main()
+
