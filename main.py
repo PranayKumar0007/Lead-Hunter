@@ -19,10 +19,12 @@ IMPORTANT:
 from maps_fetcher import get_fresh_leads
 from email_finder import enrich_leads_with_emails
 from company_researcher import research_company
-from ai_outreach import generate_emails_for_leads, generate_email, YOUR_SERVICE
+from ai_outreach import generate_emails_for_leads, generate_email
 from email_sender import send_emails_for_leads
 from report import save_to_csv, print_summary
 from lead_tracker import get_known_domains, upsert_leads, get_summary
+from service_personalizer import get_service_pitch
+from snov_tracker import print_snov_status
 
 # ─── SAFETY SWITCH ────────────────────────────────────────────────────────────
 #  Set to True ONLY after you've reviewed the dry-run CSV in output/leads.csv
@@ -32,6 +34,7 @@ ACTUALLY_SEND = False
 
 def main():
     print("\n🚀 Starting Lead Hunter pipeline...\n")
+    print_snov_status()
 
     # Step 1: Load known domains to skip already-contacted leads
     known_domains = get_known_domains()
@@ -53,8 +56,9 @@ def main():
         if lead.get("email"):
             print(f"[Research] Researching: {lead['name']}...")
             research = research_company(lead)
+            service_pitch = get_service_pitch(research)
             lead["email_subject"], lead["email_body"] = "", ""
-            result = generate_email(lead, YOUR_SERVICE, research)
+            result = generate_email(lead, service_pitch, research)
             lead["email_subject"] = result.get("subject", "")
             lead["email_body"] = result.get("body", "")
             if lead["email_subject"]:
@@ -78,6 +82,7 @@ def main():
 
     # Step 8: Print all-time tracker summary
     get_summary()
+    print_snov_status()
 
 
 if __name__ == "__main__":

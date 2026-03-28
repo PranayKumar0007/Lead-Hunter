@@ -7,15 +7,7 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Define your service offer here — this is what GPT will pitch on your behalf
-YOUR_SERVICE = os.getenv(
-    "YOUR_SERVICE",
-    (
-        "I build lightweight AI automations for service businesses that automatically "
-        "generate and follow up with leads — no new tools to learn, no monthly SaaS fee. "
-        "Typically gets 5-10 new qualified leads per month for a business your size."
-    ),
-)
+# Removed global YOUR_SERVICE string to favor dynamic service personalization engine input
 
 
 def generate_email(business: dict, your_service: str, research: dict = {}) -> dict:
@@ -121,7 +113,7 @@ Return ONLY this JSON, no markdown, no extra text:
         return {}
 
 
-def generate_emails_for_leads(leads: list[dict]) -> list[dict]:
+def generate_emails_for_leads(leads: list[dict], your_service: str = "I build AI automations that automatically capture leads and handle follow-ups.") -> list[dict]:
     """
     Add 'email_subject' and 'email_body' fields to each lead that has an email address.
     Skips leads with no found email.
@@ -129,7 +121,7 @@ def generate_emails_for_leads(leads: list[dict]) -> list[dict]:
     for lead in leads:
         if lead.get("email"):
             print(f"[AI] Generating SMYKM email for: {lead['name']}")
-            result = generate_email(lead, YOUR_SERVICE)
+            result = generate_email(lead, your_service)
             lead["email_subject"] = result.get("subject", "")
             lead["email_body"] = result.get("body", "")
             if lead["email_subject"]:
