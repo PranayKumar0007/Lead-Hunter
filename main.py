@@ -14,8 +14,12 @@ Pipeline:
 IMPORTANT:
   ACTUALLY_SEND = False  → dry run (safe, default)
   ACTUALLY_SEND = True   → live send (only flip after reviewing CSV!)
+
+Optional flags:
+  python main.py --run-followups   → run full pipeline AND follow-up pass
 """
 
+import sys
 from maps_fetcher import get_fresh_leads
 from email_finder import enrich_leads_with_emails
 from company_researcher import research_company
@@ -87,4 +91,11 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Optionally run the follow-up pass in the same invocation
+    if "--run-followups" in sys.argv:
+        from followup_runner import run_followup_pass
+        print("\n" + "—" * 50)
+        print("  Running follow-up pass...")
+        print("—" * 50)
+        run_followup_pass()
 

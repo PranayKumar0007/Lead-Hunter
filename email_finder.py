@@ -8,6 +8,19 @@ from snov_service import find_email_with_snov
 
 load_dotenv()
 
+def extract_domain(url: str) -> str:
+    """Extract bare domain (e.g. 'example.com') from a URL or domain string."""
+    if not url:
+        return ""
+    url = url.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    parsed = urlparse(url)
+    domain = parsed.netloc or parsed.path
+    # Strip www.
+    domain = re.sub(r"^www\.", "", domain).lower()
+    return domain.split("/")[0]  # Remove any trailing path segments
+
 # === NEW: WEBSITE SCRAPER FALLBACK ===
 def scrape_email_from_website(company_website: str, domain: str):
     """

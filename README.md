@@ -1,66 +1,182 @@
-# Lead Hunter
+# Lead Hunter 🚀
 
-An automated lead generation pipeline that finds local service businesses, discovers their contact emails, researches their websites, and sends personalized cold emails — all powered by AI.
+An end-to-end AI-powered outbound pipeline — from finding local businesses on Google Maps to automatically following up until they book a call.
 
-## 🚀 New Features: Persistent Lead Tracking
+```
+Google Maps → Email Discovery → AI Cold Email → Zoho Send
+                                                    ↓
+                          Auto Follow-Up: Day 3 → 7 → 14 → 21 (Closing)
+```
 
-Lead Hunter now includes a robust **Lead Tracking System** that automatically deduplicates businesses and manages outreach states across multiple runs:
+---
 
-- **Smart Deduplication:** Never email the same company twice. The pipeline checks existing leads before fetching new ones.
-- **Status Management:** Leads are naturally tracked as `pending`, `sent`, `follow_up`, or `skipped`.
-- **CLI Management Tool:** Easily view your database and manually update lead statuses right from the command line.
+## Pipeline Overview
 
-## How It Works
+### Part 1 — Prospecting (`main.py`)
+| Step | Module | What it does |
+|---|---|---|
+| 1 | `lead_tracker.py` | Load known domains — skip already-contacted leads |
+| 2 | `maps_fetcher.py` | Find fresh businesses via Google Maps API |
+| 3 | `email_finder.py` | Discover emails: website scrape → Snov.io → pattern |
+| 4 | `company_researcher.py` | Scrape homepage + GPT analysis for personalization |
+| 5 | `ai_outreach.py` | Write SMYKM cold email via GPT-4o-mini |
+| 6 | `email_sender.py` | Send via Zoho SMTP (dry-run by default) |
+| 7 | `lead_tracker.py` | Save results to `output/lead_db.json` |
+| 8 | `report.py` | Export `output/leads.csv` + print summary |
 
-1. **Check Tracking DB** — Loads known domains to prevent re-processing past leads.
-2. **Find Businesses** — Searches Google Maps for **fresh** businesses matching your niche and location.
-3. **Find Emails** — Uses Snov.io to discover the best contact email for each business.
-4. **Research** — Scrapes each business's website and uses AI to extract personalization angles.
-5. **Generate Email** — Writes a personalized cold email using the SMYKM (Show Me You Know Me) framework.
-6. **Send** — Delivers emails via Zoho SMTP (dry-run by default for safety).
-7. **Track & Report** — Saves results to the persistent DB, outputs a CSV report, and prints a final all-time track summary.
+### Part 2 — Automated Follow-Up (`followup_runner.py`)
+Runs automatically every morning at 9 AM via Windows Task Scheduler.
+
+| Step | Day | Tone |
+|---|---|---|
+| Initial cold email | Day 0 | SMYKM personalized pitch |
+| Follow-up 1 | Day 3 | Gentle bump — "Did this land?" |
+| Follow-up 2 | Day 7 | Value-add — industry insight + result |
+| Follow-up 3 | Day 14 | Last try — honest, direct |
+| Closing | Day 21 | Book a call — calendar link embedded |
+
+---
 
 ## Setup
 
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
-# Fill in your API keys in .env
+# Fill in your API keys (see below)
 ```
+
+---
+
+## API Keys Required
+
+| Key | Where to get it | Used for |
+|---|---|---|
+| `GOOGLE_MAPS_API_KEY` | [Google Cloud Console](https://console.cloud.google.com/) — enable *Places API* | Finding businesses by location |
+| `SNOV_CLIENT_ID` + `SNOV_CLIENT_SECRET` | [Snov.io → Settings → API](https://app.snov.io/api-setting) | Email discovery (paid, 50 free credits) |
+| `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | Cold email + follow-up generation (GPT-4o-mini) |
+| `ZOHO_EMAIL` + `ZOHO_APP_PASSWORD` | [Zoho Mail → Settings → App Passwords](https://accounts.zoho.in/security) | Sending emails via SMTP |
+| `APOLLO_API_KEY` | [Apollo.io → Settings → API](https://app.apollo.io/#/settings/integrations/api) | Optional secondary email enrichment |
+
+> **Never commit your `.env` file.** It's already in `.gitignore`.
+
+---
 
 ## Usage
 
-### Run the Pipeline
+### Run the Prospecting Pipeline
 
 ```bash
-# Run the full pipeline (dry-run mode by default)
+# Dry run (safe — review output/leads.csv before sending)
 python main.py
+
+# Prospect fresh leads AND run follow-up pass in one command
+python main.py --run-followups
 ```
-*Note: To actually send emails, switch `ACTUALLY_SEND = True` inside `main.py` after reviewing the output.*
 
-### Manage Leads (Tracker CLI)
+> To actually send cold emails, set `ACTUALLY_SEND = True` in `main.py` after reviewing the CSV.
 
-You can view and manage your leads database using the included CLI tool:
+### Run Follow-Ups Manually
 
 ```bash
-# Show all leads and all stats
+# Dry run — see what would be sent today
+python followup_runner.py
+
+# Live send
+python followup_runner.py --send
+```
+
+### Manage Your Lead Database
+
+```bash
+# Show all leads
 python tracker_cli.py
 
-# Filter by a specific status (pending, sent, follow_up, skipped)
-python tracker_cli.py --status follow_up
+# Show leads due for follow-up TODAY
+python tracker_cli.py --due
 
-# Manually update a lead's status
-python tracker_cli.py --update domain.com sent
+# Filter by status
+python tracker_cli.py --status follow_up_1
 
-# Print stats summary only
+# Mark outcomes manually
+python tracker_cli.py --mark acme.com replied
+python tracker_cli.py --mark acme.com booked
+python tracker_cli.py --mark acme.com dead
+
+# Lifetime stats
 python tracker_cli.py --summary
 ```
 
-## API Keys Needed
+### Lead Statuses
 
-- Google Maps API
-- Snov.io (Client ID + Secret)
-- OpenAI
-- Zoho Mail (Email + App Password)
+```
+pending → sent → follow_up_1 → follow_up_2 → follow_up_3 → closing
+                                                               ↓
+                                              replied → booked → closed
+                                              dead
+```
 
-See `.env.example` for all required variables.
+---
+
+## Configuration (`.env`)
+
+```env
+# Search
+SEARCH_QUERIES=digital marketing agencies
+SEARCH_LOCATIONS=Hyderabad,Bangalore,Mumbai,Delhi
+SEARCH_RADIUS_METERS=15000
+MAX_LEADS=20
+
+# Follow-up timing (produces Day 3 / 7 / 14 / 21 offsets)
+FOLLOWUP_1_DELAY_DAYS=3
+FOLLOWUP_2_DELAY_DAYS=4
+FOLLOWUP_3_DELAY_DAYS=7
+CLOSING_DELAY_DAYS=7
+
+# Calendar link embedded in Day 21 closing email
+CALENDAR_LINK=https://calendly.com/yourname/15min
+
+# Safety switches (set to True only after dry-run review)
+ACTUALLY_SEND=False
+FOLLOWUP_SEND=False
+```
+
+---
+
+## Windows Task Scheduler
+
+`followup_runner.py` is registered to run automatically at **9:00 AM daily**.  
+If the PC was asleep or off at 9 AM, it runs immediately on wake/boot (*StartWhenAvailable* enabled).
+
+To verify the task:
+```
+Task Scheduler → Task Scheduler Library → "LeadHunter Daily Follow-Up"
+```
+
+Logs are written to `output/followup_runner.log`.
+
+---
+
+## Project Structure
+
+```
+lead-hunter/
+├── main.py                  # Prospecting pipeline orchestrator
+├── followup_runner.py       # Daily follow-up scheduler
+├── followup_runner.bat      # Task Scheduler entry point
+├── follow_up_writer.py      # AI follow-up email generator (4 templates)
+├── maps_fetcher.py          # Google Maps lead discovery
+├── email_finder.py          # Email discovery waterfall
+├── company_researcher.py    # Website scrape + GPT analysis
+├── ai_outreach.py           # SMYKM cold email generator
+├── email_sender.py          # Zoho SMTP sender
+├── lead_tracker.py          # Persistent lead DB (lead_db.json)
+├── tracker_cli.py           # CLI to view/manage lead DB
+├── service_personalizer.py  # Industry-aware pitch selector
+├── snov_service.py          # Snov.io API wrapper
+├── snov_tracker.py          # Snov.io credit usage tracker
+├── report.py                # CSV export + run summary
+└── output/
+    ├── lead_db.json         # Persistent lead database
+    ├── leads.csv            # Latest run export
+    └── followup_runner.log  # Daily follow-up run log
+```

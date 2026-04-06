@@ -37,7 +37,7 @@ def _extract_domain(website: str) -> str:
     return parsed.netloc.replace("www.", "").lower().strip()
 
 
-def fetch_places_page(lat: float, lng: float, page_token: str = None) -> tuple[list, str | None]:
+def fetch_places_page(lat: float, lng: float, query: str, page_token: str = None) -> tuple[list, str | None]:
     """
     Fetch a single page of nearby businesses.
     Returns (results_list, next_page_token_or_None).
@@ -45,7 +45,7 @@ def fetch_places_page(lat: float, lng: float, page_token: str = None) -> tuple[l
     params = {
         "location": f"{lat},{lng}",
         "radius": SEARCH_RADIUS_METERS,
-        "keyword": SEARCH_QUERY,
+        "keyword": query,
         "key": GOOGLE_MAPS_API_KEY,
     }
     if page_token:
@@ -103,7 +103,7 @@ def get_leads() -> list[dict]:
 
             while len(leads) < MAX_LEADS:
                 page_num += 1
-                page, next_token = fetch_places_page(lat, lng, next_token)
+                page, next_token = fetch_places_page(lat, lng, query, next_token)
 
                 if not page:
                     break
@@ -175,7 +175,7 @@ def get_fresh_leads(known_domains: set = None) -> list[dict]:
 
             while len(fresh_leads) < MAX_LEADS:
                 page_num += 1
-                page, next_token = fetch_places_page(lat, lng, next_token)
+                page, next_token = fetch_places_page(lat, lng, query, next_token)
 
                 if not page:
                     break

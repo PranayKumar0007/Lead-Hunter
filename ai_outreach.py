@@ -19,69 +19,45 @@ def generate_email(business: dict, your_service: str, research: dict = {}) -> di
     it was written for THIS business, not a generic blast.
     """
     prompt = f"""
-You are an expert cold email copywriter specializing in B2B outreach for service businesses.
+You are a cold email copywriter writing on behalf of a lead generation and appointment setting agency.
 
-Your task is to generate a highly personalized, short, and conversational cold email using the "Show Me You Know Me" (SMYKM) framework.
+Your task: write a short, direct, results-focused cold email for the business below.
 
-### Context
+The tone should be casual yet confident — like a message from someone who has already figured something out and is sharing it, not pitching.
 
-BUSINESS DETAILS:
+### BUSINESS DETAILS:
 - Company name: {business['name']}
 - Location: {business.get('address', 'unknown')}
 - Website: {business.get('website', 'unknown')}
-- Industry rating/size signal: {business.get('rating', 'unknown')}
 
-RESEARCH (if available):
-{research if research else "None provided. Use business name and location to infer context."}
+### RESEARCH (if available):
+{research if research else "None. Infer from name and location."}
 
-YOUR SERVICE:
+### SERVICE:
 {your_service}
 
-### Goal
+### SAMPLE EMAIL (use this as structural inspiration only — do NOT copy it):
+Subject: quick thought on your lead flow + ads
 
-Write a cold email that:
-* Feels human and not like a sales pitch
-* Is under 100 words
-* Uses simple, conversational language
-* Creates curiosity instead of explaining everything
-* Focuses on ONE clear idea
+Saw you're helping [students/niche] grow — quick thought.
 
----
+Most [coaching institutes / edtech brands] I've seen struggle with consistent outbound alongside their ads.
 
-### Structure
+We've been testing a system that finds high-intent prospects and writes outreach specific to them — so it doesn't feel like spam.
 
-1. Subject line:
-   - Short (3–6 words)
-   - Personalized with company name or idea
+Might be worth trying alongside your current setup.
 
-2. Opening:
-   - Mention the company + a specific positive observation
+Happy to share a few leads if you're open.
 
-3. Insight:
-   - Highlight a likely pain point (e.g., scaling, lead follow-up, missed opportunities)
+### RULES:
+- Under 100 words for the body
+- No "I hope this finds you well", "We haven't met", or "I wanted to reach out"
+- Reference the company by name at least once
+- One clear idea, one soft CTA
+- Sign off as: Pranay
+- Subject: 4–7 words, specific and intriguing
 
-4. Offer:
-   - Briefly mention AI automation solution (no jargon, no hard selling)
-
-5. CTA:
-   - Low friction, curiosity-based
-   - Example: "Want me to share what I noticed?"
-
----
-
-### Rules
-
-* DO NOT use phrases like:
-  - "We haven't met"
-  - "I hope you're doing well"
-  - "I wanted to reach out"
-* DO NOT sound salesy or corporate
-* DO NOT exceed 100 words
-* DO NOT list features or benefits
-* Keep tone casual and direct
-* Sign off as: Pranay
-
-Return ONLY this JSON, no markdown, no extra text:
+Return ONLY this JSON (no markdown, no extra text):
 {{
   "subject": "...",
   "body": "..."
