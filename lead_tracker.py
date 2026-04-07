@@ -74,17 +74,17 @@ def save_db(db: dict) -> None:
 
 def get_known_domains() -> set:
     """
-    Return domains that have already entered the outreach sequence.
-    Leads in 'pending' state (dry-run only, never emailed) are excluded
-    so they get picked up again on the next real run.
+    Return all domains currently in the database to ensure
+    Google Maps fetching skips them and finds fresh leads.
     """
     db = load_db()
-    active_statuses = {
-        "sent", "follow_up_1", "follow_up_2", "follow_up_3",
-        "closing", "replied", "booked", "closed", "dead",
-    }
-    return {domain for domain, record in db.items()
-            if record.get("outreach_status") in active_statuses}
+    return set(db.keys())
+
+
+def get_pending_leads() -> list[dict]:
+    """Return all leads in 'pending' status (never successfully emailed)."""
+    db = load_db()
+    return [record for record in db.values() if record.get("outreach_status") == "pending"]
 
 
 def upsert_leads(leads: list[dict]) -> dict:
@@ -116,7 +116,8 @@ def upsert_leads(leads: list[dict]) -> dict:
                 "industry":         lead.get("industry", ""),
                 "first_seen":       today,
                 "last_contacted":   today if outreach_status == "sent" else None,
-                "outreach_status":  outreach_status,
+                "outreach_status":  "guessed" if lead.get("email_details", {}).get("source") == "Pattern Guessing" else outreach_status,
+                "email_source":     lead.get("email_details", {}).get("source", ""),
                 "email_subject":    lead.get("email_subject", ""),
                 "follow_up_1_sent": None,
                 "follow_up_2_sent": None,
@@ -141,6 +142,12 @@ def upsert_leads(leads: list[dict]) -> dict:
             for field in ("follow_up_1_sent", "follow_up_2_sent", "follow_up_3_sent", "closing_sent"):
                 existing.setdefault(field, None)
             existing.setdefault("notes", "")
+            if not existing.get("email_source") and lead.get("email_details", {}).get("source"):
+                existing["email_source"] = lead["email_details"]["source"]
+            
+            # If current lead was guessed, set status accordingly if not already contacted
+            if lead.get("email_details", {}).get("source") == "Pattern Guessing":
+                outreach_status = "guessed"
 
             # Only upgrade status along the lifecycle, never downgrade
             status_rank = {
@@ -148,6 +155,7 @@ def upsert_leads(leads: list[dict]) -> dict:
                 "follow_up_1": 2, "follow_up_2": 3, "follow_up_3": 4,
                 "closing": 5, "replied": 6, "booked": 7,
                 "closed": 8, "dead": 9, "skipped": 10,
+                "guessed": 11,
             }
             current_rank = status_rank.get(existing.get("outreach_status", "pending"), 0)
             new_rank = status_rank.get(outreach_status, 0)
@@ -340,6 +348,7 @@ def get_summary(db: dict = None) -> None:
     print(f"  Closed                : {by_status.get('closed', 0)}")
     print(f"  Dead (no response)    : {by_status.get('dead', 0)}")
     print(f"  Skipped               : {by_status.get('skipped', 0)}")
+    print(f"  Guessed (not sent)    : {by_status.get('guessed', 0)}")
 
     # Show leads currently in-sequence that are awaiting response
     in_sequence = [

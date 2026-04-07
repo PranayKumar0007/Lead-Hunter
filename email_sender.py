@@ -68,7 +68,13 @@ def send_emails_for_leads(leads: list[dict], actually_send: bool = False) -> lis
     """
     sent_count = 0
     for lead in leads:
+        email_source = lead.get("email_details", {}).get("source", "")
         if not lead.get("email") or not lead.get("email_body"):
+            lead["send_status"] = "skipped"
+            continue
+            
+        if email_source == "Pattern Guessing":
+            print(f"[SMTP] Skipping {lead['email']}: Guessed emails are not for outreach.")
             lead["send_status"] = "skipped"
             continue
 

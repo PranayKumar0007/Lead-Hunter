@@ -32,7 +32,7 @@ from snov_tracker import print_snov_status
 
 # ─── SAFETY SWITCH ────────────────────────────────────────────────────────────
 #  Set to True ONLY after you've reviewed the dry-run CSV in output/leads.csv
-ACTUALLY_SEND = False
+ACTUALLY_SEND = True
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -57,7 +57,9 @@ def main():
 
     # Step 4: Research each business website + generate SMYKM cold email
     for lead in leads:
-        if lead.get("email"):
+        # Skip research for leads with no email OR guessed emails
+        email_source = lead.get("email_details", {}).get("source", "")
+        if lead.get("email") and email_source != "Pattern Guessing":
             print(f"[Research] Researching: {lead['name']}...")
             research = research_company(lead)
             service_pitch = get_service_pitch(research)
@@ -68,6 +70,8 @@ def main():
             if lead["email_subject"]:
                 print(f"[AI] Subject: {lead['email_subject']}")
         else:
+            if email_source == "Pattern Guessing":
+                print(f"[Research] Skipping: {lead['name']} (Guessed Email)")
             lead["email_subject"] = ""
             lead["email_body"] = ""
 

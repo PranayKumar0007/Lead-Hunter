@@ -179,6 +179,7 @@ def enrich_leads_with_emails(leads: list[dict]) -> list[dict]:
         result = get_email(lead, domain, lead.get("website", ""))
         if result:
             lead["email"] = result["email"]
+            lead["email_source"] = result["source"]
             lead["email_details"] = result
         else:
             lead["email"] = ""

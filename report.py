@@ -9,6 +9,7 @@ OUTPUT_FIELDS = [
     "phone",
     "website",
     "email",
+    "email_source",
     "email_subject",
     "email_body",
     "send_status",
@@ -40,6 +41,7 @@ def print_summary(leads: list[dict]) -> None:
     sent = sum(1 for l in leads if l.get("send_status") == "sent")
     dry_run = sum(1 for l in leads if l.get("send_status") == "dry_run")
     skipped = sum(1 for l in leads if l.get("send_status") == "skipped")
+    guessed = sum(1 for l in leads if l.get("email_details", {}).get("source") == "Pattern Guessing")
 
     print("\n" + "=" * 42)
     print("       LEAD HUNTER — RUN SUMMARY")
@@ -50,4 +52,5 @@ def print_summary(leads: list[dict]) -> None:
     print(f"  Sent (live)            : {sent}")
     print(f"  Dry run (not sent)     : {dry_run}")
     print(f"  Skipped (no email)     : {skipped}")
+    print(f"  Guessed (skipped)      : {guessed}")
     print("=" * 42 + "\n")
